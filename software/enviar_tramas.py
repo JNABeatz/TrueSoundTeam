@@ -95,7 +95,7 @@ class MaraniDSPController:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(self.timeout)
                 s.connect((self.ip, self.port))
-                s.sendall(trama)
+                s.send(trama)
         else:
             raise ValueError(f"Protocolo no soportado: {self.protocol}. Usa 'TCP' o 'UDP'.")
 
