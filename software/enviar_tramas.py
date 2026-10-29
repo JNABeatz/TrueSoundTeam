@@ -87,7 +87,7 @@ class MaraniDSPController:
         Estructura: F0 | 91 | DEV | 08 | 01 | CH | EST | 00 | 00 | 00 | 00 | F7
         """
         ch_byte = cls._validar_canal(canal)
-        estado_byte = 0x01 if bypass else 0x00
+        estado_byte = 0x00 if bypass else 0x01
 
         return bytearray([
             cls.HEADER_START,
