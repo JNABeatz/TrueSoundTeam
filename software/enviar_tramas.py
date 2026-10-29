@@ -2,10 +2,11 @@ import socket
 import argparse
 import sys
 
-# Configuración de red por defecto
+# Configuración de red y constantes globales
 DSP_IP = "192.168.0.100"
 DSP_PORT = 1001
 PROTOCOLO = "TCP"
+DEVICE_BYTE = 0x02
 
 
 class MaraniDSPController:
@@ -16,6 +17,7 @@ class MaraniDSPController:
     
     CMD_MUTE = 0x03
     CMD_GAIN = 0x04
+    CMD_EQ_GLOBAL = 0x08
 
     def __init__(self, ip: str = DSP_IP, port: int = DSP_PORT, protocol: str = PROTOCOLO, timeout: float = 3.0):
         self.ip = ip
@@ -33,11 +35,10 @@ class MaraniDSPController:
         return canal - 1
 
     @classmethod
-    def crear_trama_ganancia(cls, canal: int, ganancia_db: float, device_byte: int = 0x01) -> bytearray:
+    def crear_trama_ganancia(cls, canal: int, ganancia_db: float) -> bytearray:
         """
         Construye la trama de 13 bytes para ajustar la ganancia de un canal.
-        Estructura: F0 | 91 | 01 | 04 | 01 | CH | 02 | VAL | 00 | 00 | 00 | 00 | F7
-        0 dB = 88 (0x58), pasos de 0.1 dB = 1 entero.
+        Estructura: F0 | 91 | DEV | 04 | 01 | CH | 02 | VAL | 00 | 00 | 00 | 00 | F7
         """
         ch_byte = cls._validar_canal(canal)
         
@@ -48,7 +49,7 @@ class MaraniDSPController:
         return bytearray([
             cls.HEADER_START,
             cls.MANUFACTURER_ID,
-            device_byte,
+            DEVICE_BYTE,
             cls.CMD_GAIN,
             0x01,
             ch_byte,
@@ -59,12 +60,10 @@ class MaraniDSPController:
         ])
 
     @classmethod
-    def crear_trama_mute(cls, canal: int, mute: bool, device_byte: int = 0x01) -> bytearray:
+    def crear_trama_mute(cls, canal: int, mute: bool) -> bytearray:
         """
         Construye la trama de 13 bytes para silenciar (mute) o activar (unmute) un canal.
-        Estructura: F0 | 91 | 01 | 03 | 01 | CH | ESTADO | 00 | 00 | 00 | 00 | 00 | F7
-        Estado: 0x01 = Mute, 0x00 = Unmute.
-        Nota: Permite modificar device_byte (3er byte, por defecto 0x01, o 0x03 para pruebas en canal 1).
+        Estructura: F0 | 91 | DEV | 03 | 01 | CH | ESTADO | 00 | 00 | 00 | 00 | 00 | F7
         """
         ch_byte = cls._validar_canal(canal)
         estado_byte = 0x01 if mute else 0x00
@@ -72,12 +71,33 @@ class MaraniDSPController:
         return bytearray([
             cls.HEADER_START,
             cls.MANUFACTURER_ID,
-            device_byte,
+            DEVICE_BYTE,
             cls.CMD_MUTE,
             0x01,
             ch_byte,
             estado_byte,
             0x00, 0x00, 0x00, 0x00, 0x00,
+            cls.FOOTER_END
+        ])
+
+    @classmethod
+    def crear_trama_eq_global(cls, canal: int, bypass: bool) -> bytearray:
+        """
+        Construye la trama de 13 bytes para encender o poner en bypass la ecualización global de un canal.
+        Estructura: F0 | 91 | DEV | 08 | 01 | CH | EST | 00 | 00 | 00 | 00 | F7
+        """
+        ch_byte = cls._validar_canal(canal)
+        estado_byte = 0x01 if bypass else 0x00
+
+        return bytearray([
+            cls.HEADER_START,
+            cls.MANUFACTURER_ID,
+            DEVICE_BYTE,
+            cls.CMD_EQ_GLOBAL,
+            0x01,
+            ch_byte,
+            estado_byte,
+            0x00, 0x00, 0x00, 0x00,
             cls.FOOTER_END
         ])
 
@@ -107,8 +127,17 @@ class MaraniDSPController:
             self.enviar_trama(trama)
         return trama
 
-    def set_mute(self, canal: int, mute: bool, device_byte: int = 0x01, enviar: bool = True) -> bytearray:
-        trama = self.crear_trama_mute(canal, mute, device_byte=device_byte)
+    def set_mute(self, canal: int, mute: bool, enviar: bool = True) -> bytearray:
+        trama = self.crear_trama_mute(canal, mute)
+        if enviar:
+            self.enviar_trama(trama)
+        return trama
+
+    def set_eq_global(self, canal: int, bypass: bool, enviar: bool = True) -> bytearray:
+        """
+        Activa o desactiva (bypass) la ecualización global de un canal específico.
+        """
+        trama = self.crear_trama_eq_global(canal, bypass)
         if enviar:
             self.enviar_trama(trama)
         return trama
